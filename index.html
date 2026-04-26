@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Synthesis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .upload-zone {
+            flex: 1;
+            min-width: 280px;
+            max-width: 400px;
+            aspect-ratio: 4/3;
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover {
+            border-color: #666;
+            background-color: #fafafa;
+        }
+
+        .upload-zone.dragover {
+            border-color: #007bff;
+            background-color: #f0f7ff;
+        }
+
+        .upload-zone.has-image {
+            border-style: solid;
+            border-color: #28a745;
+        }
+
+        .upload-zone-label {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .upload-zone-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            color: #666;
+        }
+
+        .upload-zone-content svg {
+            width: 48px;
+            height: 48px;
+            stroke: #999;
+        }
+
+        .upload-zone-content span {
+            font-size: 14px;
+        }
+
+        .upload-zone-content small {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .upload-zone input[type="file"] {
+            display: none;
+        }
+
+        .preview-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: #f0f0f0;
+        }
+
+        .result-row {
+            margin-top: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        .result-zone {
+            width: 100%;
+            max-width: 820px;
+            min-height: 300px;
+            aspect-ratio: 4/3;
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .result-zone.has-result {
+            border-style: solid;
+            border-color: #28a745;
+        }
+
+        .result-zone-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            color: #999;
+        }
+
+        .result-zone-placeholder svg {
+            width: 48px;
+            height: 48px;
+            stroke: #ccc;
+        }
+
+        .result-zone-placeholder span {
+            font-size: 14px;
+        }
+
+        .result-zone.has-result .result-zone-placeholder {
+            display: none;
+        }
+
+        .result-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: #f0f0f0;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .loading-overlay.hidden {
+            display: none;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .button-row {
+            margin-top: 30px;
+        }
+
+        .generate-btn {
+            padding: 14px 48px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .generate-btn:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+
+        .generate-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="input-row">
+            <div class="upload-zone" id="zoneA">
+                <span class="upload-zone-label">Image A</span>
+                <div class="upload-zone-content">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                    </svg>
+                    <span>Drop image here</span>
+                    <small>or click to select</small>
+                    <small>JPEG, PNG • Max 10MB</small>
+                </div>
+                <input type="file" id="inputA" accept=".jpeg,.jpg,.png">
+            </div>
+
+            <div class="upload-zone" id="zoneB">
+                <span class="upload-zone-label">Image B</span>
+                <div class="upload-zone-content">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                    </svg>
+                    <span>Drop image here</span>
+                    <small>or click to select</small>
+                    <small>JPEG, PNG • Max 10MB</small>
+                </div>
+                <input type="file" id="inputB" accept=".jpeg,.jpg,.png">
+            </div>
+        </div>
+
+        <div class="result-row">
+            <div class="result-zone" id="resultZone">
+                <div class="result-zone-placeholder">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                    </svg>
+                    <span>Result will appear here</span>
+                </div>
+                <img class="result-image" id="resultImage" style="display: none;">
+                <div class="loading-overlay hidden" id="loadingOverlay">
+                    <div class="spinner"></div>
+                    <span class="loading-text">Generating...</span>
+                </div>
+                <div class="error-message hidden" id="errorMessage"></div>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button class="generate-btn" id="generateBtn" disabled>Generate</button>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        const MAX_FILE_SIZE = 10 * 1024 * 1024;
+        const ACCEPTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png'];
+
+        const state = {
+            fileA: null,
+            fileB: null,
+            isProcessing: false
+        };
+
+        const elements = {
+            zoneA: document.getElementById('zoneA'),
+            zoneB: document.getElementById('zoneB'),
+            inputA: document.getElementById('inputA'),
+            inputB: document.getElementById('inputB'),
+            resultZone: document.getElementById('resultZone'),
+            resultImage: document.getElementById('resultImage'),
+            loadingOverlay: document.getElementById('loadingOverlay'),
+            errorMessage: document.getElementById('errorMessage'),
+            generateBtn: document.getElementById('generateBtn')
+        };
+
+        function validateFile(file) {
+            if (!ACCEPTED_FORMATS.includes(file.type)) {
+                alert('Please upload a JPEG, JPG, or PNG image.');
+                return false;
+            }
+            if (file.size > MAX_FILE_SIZE) {
+                alert('File size must be less than 10MB.');
+                return false;
+            }
+            return true;
+        }
+
+        function handleFileSelect(zone, input, fileKey) {
+            const file = input.files[0];
+            if (!file) return;
+
+            if (!validateFile(file)) {
+                input.value = '';
+                return;
+            }
+
+            state[fileKey] = file;
+            updateZonePreview(zone, file);
+            updateGenerateButton();
+        }
+
+        function updateZonePreview(zone, file) {
+            const existingImg = zone.querySelector('.preview-image');
+            if (existingImg) existingImg.remove();
+
+            const content = zone.querySelector('.upload-zone-content');
+            if (content) content.style.display = 'none';
+
+            const img = document.createElement('img');
+            img.className = 'preview-image';
+            img.alt = 'Preview';
+            img.src = URL.createObjectURL(file);
+            zone.appendChild(img);
+            zone.classList.add('has-image');
+        }
+
+        function updateGenerateButton() {
+            const canGenerate = state.fileA && state.fileB && !state.isProcessing;
+            elements.generateBtn.disabled = !canGenerate;
+        }
+
+        function setupUploadZone(zone, input, fileKey) {
+            zone.addEventListener('click', (e) => {
+                if (e.target.tagName === 'IMG') return;
+                input.click();
+            });
+
+            input.addEventListener('change', () => {
+                handleFileSelect(zone, input, fileKey);
+            });
+
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('dragover');
+            });
+
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('dragover');
+            });
+
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                    handleFileSelect(zone, input, fileKey);
+                }
+            });
+        }
+
+        function resetResultZone() {
+            elements.resultImage.style.display = 'none';
+            elements.resultImage.src = '';
+            elements.resultZone.classList.remove('has-result');
+            elements.errorMessage.classList.add('hidden');
+            elements.errorMessage.textContent = '';
+        }
+
+        function showLoading() {
+            state.isProcessing = true;
+            resetResultZone();
+            elements.loadingOverlay.classList.remove('hidden');
+            elements.resultZone.classList.add('has-result');
+            updateGenerateButton();
+        }
+
+        function hideLoading() {
+            state.isProcessing = false;
+            elements.loadingOverlay.classList.add('hidden');
+            updateGenerateButton();
+        }
+
+        function showResult(imageUrl) {
+            elements.resultImage.src = imageUrl;
+            elements.resultImage.style.display = 'block';
+            elements.resultZone.classList.add('has-result');
+        }
+
+        function showError(message) {
+            elements.errorMessage.textContent = message;
+            elements.errorMessage.classList.remove('hidden');
+            elements.resultZone.classList.add('has-result');
+        }
+
+        async function callWebhook() {
+            const formData = new FormData();
+            formData.append('image_left', state.fileA);
+            formData.append('image_right', state.fileB);
+
+            const response = await fetch(CONFIG.webhookUrl, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`Upload Failed (${response.status})`);
+            }
+
+            const contentType = response.headers.get('content-type');
+
+            if (contentType && contentType.includes('image')) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                return url;
+            } else {
+                const json = await response.json();
+                if (json.output_url) {
+                    return json.output_url;
+                }
+                throw new Error('Invalid response format');
+            }
+        }
+
+        async function handleGenerate() {
+            showLoading();
+            resetResultZone();
+
+            try {
+                const imageUrl = await callWebhook();
+                showResult(imageUrl);
+            } catch (error) {
+                showError(error.message || 'Generation failed');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function init() {
+            setupUploadZone(elements.zoneA, elements.inputA, 'fileA');
+            setupUploadZone(elements.zoneB, elements.inputB, 'fileB');
+
+            elements.generateBtn.addEventListener('click', handleGenerate);
+        }
+
+        init();
+    </script>
+</body>
+</html>
