@@ -232,9 +232,148 @@
             background-color: #ccc;
             cursor: not-allowed;
         }
+
+        .auth-modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .auth-modal.hidden {
+            display: none;
+        }
+
+        .auth-card {
+            background-color: #fff;
+            border-radius: 12px;
+            padding: 32px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .auth-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 24px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .auth-tab.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .auth-input {
+            padding: 12px 16px;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .auth-input:focus {
+            border-color: #007bff;
+        }
+
+        .auth-submit {
+            padding: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .auth-submit:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+
+        .auth-submit:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .auth-error {
+            color: #dc3545;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .auth-header {
+            position: fixed;
+            top: 0;
+            right: 0;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .user-email {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            font-size: 14px;
+            color: #666;
+            background-color: #f0f0f0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .logout-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
+    <div class="auth-header" id="authHeader">
+        <span class="user-email" id="userEmail"></span>
+        <button class="logout-btn" id="logoutBtn">Log out</button>
+    </div>
+
     <div class="container">
         <div class="input-row">
             <div class="upload-zone" id="zoneA">
@@ -286,10 +425,36 @@
         </div>
     </div>
 
+    <div class="auth-modal" id="authModal">
+        <div class="auth-card">
+            <h2 class="auth-title">Welcome</h2>
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="loginTab">Log in</button>
+                <button class="auth-tab" id="signupTab">Sign up</button>
+            </div>
+            <form class="auth-form" id="authForm">
+                <input type="text" class="auth-input" id="nameInput" placeholder="Full name" style="display: none;">
+                <input type="email" class="auth-input" id="emailInput" placeholder="Email" required>
+                <input type="password" class="auth-input" id="passwordInput" placeholder="Password" required>
+                <button type="submit" class="auth-submit" id="authSubmit">Log in</button>
+                <div class="auth-error hidden" id="authError"></div>
+            </form>
+        </div>
+    </div>
+
     <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
         const MAX_FILE_SIZE = 10 * 1024 * 1024;
         const ACCEPTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png'];
         const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL;
+
+        let isSignUp = false;
+        let session = null;
 
         const state = {
             fileA: null,
@@ -298,6 +463,18 @@
         };
 
         const elements = {
+            authModal: document.getElementById('authModal'),
+            authHeader: document.getElementById('authHeader'),
+            userEmail: document.getElementById('userEmail'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            loginTab: document.getElementById('loginTab'),
+            signupTab: document.getElementById('signupTab'),
+            authForm: document.getElementById('authForm'),
+            nameInput: document.getElementById('nameInput'),
+            emailInput: document.getElementById('emailInput'),
+            passwordInput: document.getElementById('passwordInput'),
+            authSubmit: document.getElementById('authSubmit'),
+            authError: document.getElementById('authError'),
             zoneA: document.getElementById('zoneA'),
             zoneB: document.getElementById('zoneB'),
             inputA: document.getElementById('inputA'),
@@ -470,11 +647,95 @@
             console.log('Init called, setting up zones');
             console.log('zoneA:', elements.zoneA, 'inputA:', elements.inputA);
             console.log('zoneB:', elements.zoneB, 'inputB:', elements.inputB);
+
+            supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+                session = currentSession;
+                updateAuthUI();
+            });
+
+            supabase.auth.onAuthStateChange((_event, currentSession) => {
+                session = currentSession;
+                updateAuthUI();
+            });
+
+            setupAuthTabs();
+            setupAuthForm();
             setupUploadZone(elements.zoneA, elements.inputA, 'fileA');
             setupUploadZone(elements.zoneB, elements.inputB, 'fileB');
 
             elements.generateBtn.addEventListener('click', handleGenerate);
+            elements.logoutBtn.addEventListener('click', handleLogout);
             console.log('Init complete');
+        }
+
+        function updateAuthUI() {
+            if (session) {
+                elements.authModal.classList.add('hidden');
+                elements.authHeader.classList.remove('hidden');
+                elements.userEmail.textContent = session.user.email;
+            } else {
+                elements.authModal.classList.remove('hidden');
+                elements.authHeader.classList.add('hidden');
+            }
+        }
+
+        function setupAuthTabs() {
+            elements.loginTab.addEventListener('click', () => {
+                isSignUp = false;
+                elements.loginTab.classList.add('active');
+                elements.signupTab.classList.remove('active');
+                elements.nameInput.style.display = 'none';
+                elements.authSubmit.textContent = 'Log in';
+            });
+
+            elements.signupTab.addEventListener('click', () => {
+                isSignUp = true;
+                elements.signupTab.classList.add('active');
+                elements.loginTab.classList.remove('active');
+                elements.nameInput.style.display = 'block';
+                elements.authSubmit.textContent = 'Sign up';
+            });
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            elements.authError.classList.add('hidden');
+            elements.authSubmit.disabled = true;
+
+            const email = elements.emailInput.value;
+            const password = elements.passwordInput.value;
+
+            try {
+                if (isSignUp) {
+                    const name = elements.nameInput.value;
+                    const { error } = await supabase.auth.signUp({
+                        email,
+                        password,
+                        options: { data: { name } }
+                    });
+                    if (error) throw error;
+                    alert('Check your email for the confirmation link!');
+                } else {
+                    const { error } = await supabase.auth.signInWithPassword({
+                        email,
+                        password
+                    });
+                    if (error) throw error;
+                }
+            } catch (err) {
+                elements.authError.textContent = err.message;
+                elements.authError.classList.remove('hidden');
+            } finally {
+                elements.authSubmit.disabled = false;
+            }
+        }
+
+        async function handleLogout() {
+            await supabase.auth.signOut();
+        }
+
+        function setupAuthForm() {
+            elements.authForm.addEventListener('submit', handleAuth);
         }
 
         init();
